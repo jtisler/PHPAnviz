@@ -2,15 +2,29 @@
 
 class PHPAnviz {
 
-    const ACK_SUCCESS = 0x00;
-    const ACK_FAIL = 0x01;
-    const CLEAR_ALL = 0x00;
-    const CLEAR_NEW = 0x01;
-    const CLEAR_NEW_PARTIALY = 0x02;
+    const ACK_SUCCESS = 0x00; //operation successful
+    const ACK_FAIL = 0x01; //operation failed
+    const ACK_FULL = 0x04; //user full
+    const ACK_EMPTY = 0x05; //user empty
+    const ACK_NO_USER = 0x06; //user does not exist
+    const ACK_TIME_OUT = 0x08; //capture timeout
+    const ACK_USER_OCCUPIED = 0x0A; //user already exists
+    const ACK_FINGER_OCCUPIED = 0x0B; //fingerprint already exists
+    
+    const CLEAR_ALL = 0x00; //clear all records
+    const CLEAR_NEW = 0x01; //clear all "new records" flag
+    const CLEAR_NEW_PARTIALY = 0x02; //clear the designated amount of "new records sign"
 
+    //device id
     private $id;
+    
+    //device port
     private $port;
+    
+    //gearman client
     private $client;
+    
+    //config array
     private $config;
 
     function __construct($id, $port, $configFilePath = '') {
@@ -25,12 +39,22 @@ class PHPAnviz {
         $this->client->addServer($this->config['gearman-server']);
     }
 
+    /**
+     * @param string $configFilePath - custom path to config file
+     * @return array
+     */
+    
     function loadConfig($configFilePath = '') {
         $configFile = $configFilePath == '' ? 'config.ini' : $configFilePath;
 
         return parse_ini_file($configFile);
     }
 
+    /**
+     * Converts hex to string
+     * @param string $hex
+     * @return string
+     */
     private function hex2str($hex) {
         $str = '';
         for ($i = 0; $i < strlen($hex); $i+=2) {
