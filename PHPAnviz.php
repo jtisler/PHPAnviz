@@ -87,33 +87,37 @@ class PHPAnviz {
                 'language_setting_flag' => hexdec($res['data'][16]),
                 'command_version' => hexdec($res['data'][17]),
             ];
-        } else {
-            return false;
+
+            return $data;
         }
 
-        return $data;
+        return false;
     }
-    
-    function setInfo1($pass = 0xFFFFFF, $sleep_time = 0xFF, $volume = 0xFF, $language = 0xFF, $dt_format = 0xFF, $attendance_state = 0xFF, $language_setting_flag = 0xFF, $reserved = 0x00){
-        
-        if(!$sleep_time || $sleep_time == '' || !is_numeric($sleep_time) || $sleep_time > 250 || $sleep_time < 0)
+
+    function setInfo1($pass = 0xFFFFFF, $sleep_time = 0xFF, $volume = 0xFF, $language = 0xFF, $dt_format = 0xFF, $attendance_state = 0xFF, $language_setting_flag = 0xFF, $reserved = 0x00) {
+
+        if (!$sleep_time || $sleep_time == '' || !is_numeric($sleep_time) || $sleep_time > 250 || $sleep_time < 0)
             $sleep_time = 0xFF;
-        
-        if(!$volume || $volume == '' || !is_numeric($volume) || $volume > 5 || $volume < 0)
+
+        if (!$volume || $volume == '' || !is_numeric($volume) || $volume > 5 || $volume < 0)
             $volume = 0xFF;
-        
-        if(!$language || $language == '' || !is_numeric($language) || $language > 16 || $language < 0)
+
+        if (!$language || $language == '' || !is_numeric($language) || $language > 16 || $language < 0)
             $language = 0xFF;
-        
-        if(!$attendance_state || $attendance_state == '' || !is_numeric($attendance_state) || $attendance_state > 15 || $attendance_state < 0)
+
+        if (!$attendance_state || $attendance_state == '' || !is_numeric($attendance_state) || $attendance_state > 15 || $attendance_state < 0)
             $attendance_state = 0xFF;
-        
-        
+
+
         $data = sprintf("%06x%02x%02x%02x%02x%02x%02x%02x", $pass, $sleep_time, $volume, $language, $dt_format, $attendance_state, $language_setting_flag, $reserved);
-        
+
         $res = $this->request(31, $data);
-        
-        return $res;
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+            return true;
+        }
+
+        return false;
     }
 
     function getInfo2() {
@@ -135,11 +139,11 @@ class PHPAnviz {
                 'scheduled_bell_delay' => hexdec($res['data'][13]),
                 'reserved' => hexdec($res['data'][14])
             ];
-        } else {
-            return false;
+
+            return $data;
         }
 
-        return $data;
+        return false;
     }
 
     function getDateTime($format = 'Y-m-d H:i:s') {
@@ -155,9 +159,9 @@ class PHPAnviz {
             $date = sprintf('20%02d-%02d-%02d %02d:%02d:%02d', $data[0], $data[1], $data[2], $data[3], $data[4], $data[5]);
 
             return date($format, strtotime($date));
-        } else {
-            return false;
         }
+
+        return false;
     }
 
     function setDateTime($dateTime = '') {
@@ -193,9 +197,9 @@ class PHPAnviz {
 
         if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
             return true;
-        } else {
-            return false;
         }
+
+        return false;
     }
 
     function getTCPIPParameters() {
@@ -214,11 +218,10 @@ class PHPAnviz {
                 'tcpip_mode' => hexdec($res['data'][25]),
                 'dhcp_limit' => hexdec($res['data'][26])
             ];
-        } else {
-            return false;
+            return $data;
         }
 
-        return $data;
+        return false;
     }
 
     function getRecordInformation() {
@@ -234,11 +237,11 @@ class PHPAnviz {
                 'all_record_amount' => hexdec(implode(array_slice($res['data'], 11, 3))),
                 'new_record_amount' => hexdec(implode(array_slice($res['data'], 15, 3))),
             ];
-        } else {
-            return false;
+
+            return $data;
         }
 
-        return $data;
+        return false;
     }
 
     function downloadTARecords() {
@@ -257,12 +260,12 @@ class PHPAnviz {
                 ];
 
                 $data[] = $event;
+
+                return $data;
             }
-        } else {
-            return false;
         }
 
-        return $data;
+        return false;
     }
 
     function downloadStaffInfo($type = 0x01, $amount = 0x08) {
@@ -300,8 +303,12 @@ class PHPAnviz {
         $res = $this->request(74);
 
         if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
-
-            return ['id' => hexdec(implode($res['data']))];
+            
+            $data = [
+                'id' => hexdec(implode($res['data']))
+            ];
+            
+            return $data;
         }
 
         return false;
@@ -311,11 +318,11 @@ class PHPAnviz {
         $data = sprintf('%08x', $id);
 
         $res = $this->request(75, $data);
-        
-        if($res['ret'] == PHPAnviz::ACK_SUCCESS){
-            return $res;
-        } 
-        
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+            return true;
+        }
+
         return false;
     }
 
@@ -324,8 +331,12 @@ class PHPAnviz {
         $data = sprintf("%02x%04x", $type, $amount);
 
         $res = $this->request('4E', $data);
+        
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+            return true;
+        }
 
-        return $res;
+        return false;
     }
 
 }
