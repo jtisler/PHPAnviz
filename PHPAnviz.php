@@ -44,19 +44,23 @@ class PHPAnviz {
 
         return $output;
     }
-
-    function getDateTime($format = 'Y-m-d H:i:s') {
+    
+    private function request($command, $data = '', $len = -1){
         $req = [
             'id' => $this->id,
             'port' => $this->port,
-            'command' => '38',
-            'data' => '',
-            'length' => ''
-        ];
-
+            'command' => (string)$command,
+            'data' => $data,
+            'length' => $len == -1 ? strlen($data) / 2 : $len
+        ]; 
+        
         $res = $this->client->doNormal("Anviz", json_encode($req));
+        
+        return $this->parseResponse($res);
+    }
 
-        $res = $this->parseResponse($res);
+    function getDateTime($format = 'Y-m-d H:i:s') {
+        $res = $this->request(38);
 
         if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
             $data = $res['data'];
@@ -68,6 +72,44 @@ class PHPAnviz {
             $date = sprintf('20%02d-%02d-%02d %02d:%02d:%02d', $data[0], $data[1], $data[2], $data[3], $data[4], $data[5]);
 
             return date($format, strtotime($date));
+        } else {
+            return false;
+        }
+    }
+    
+    function setDateTime($dateTime = ''){
+        if($dateTime == ''){
+            $ts = [
+                0 => date('Y') - 2000,
+                1 => date('m'),
+                2 => date('d'),
+                3 => date('H'),
+                4 => date('i'),
+                5 => date('s')
+            ];
+        } else {
+            $unixTime = strtotime($dateTime);
+            
+            $ts = [
+                0 => date('Y', $unixTime) - 2000,
+                1 => date('m', $unixTime),
+                2 => date('d', $unixTime),
+                3 => date('H', $unixTime),
+                4 => date('i', $unixTime),
+                5 => date('s', $unixTime)
+            ];
+        }
+        
+        foreach($ts as $key => $value){
+            $ts[$key] = sprintf('%02s', dechex($value));
+        }
+        
+        $data = implode($ts);
+        
+        $res = $this->request(39, $data);
+        
+        if($res['ret'] == PHPAnviz::ACK_SUCCESS){
+            return true;
         } else {
             return false;
         }
