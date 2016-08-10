@@ -93,6 +93,28 @@ class PHPAnviz {
 
         return $data;
     }
+    
+    function setInfo1($pass = 0xFFFFFF, $sleep_time = 0xFF, $volume = 0xFF, $language = 0xFF, $dt_format = 0xFF, $attendance_state = 0xFF, $language_setting_flag = 0xFF, $reserved = 0x00){
+        
+        if(!$sleep_time || $sleep_time == '' || !is_numeric($sleep_time) || $sleep_time > 250 || $sleep_time < 0)
+            $sleep_time = 0xFF;
+        
+        if(!$volume || $volume == '' || !is_numeric($volume) || $volume > 5 || $volume < 0)
+            $volume = 0xFF;
+        
+        if(!$language || $language == '' || !is_numeric($language) || $language > 16 || $language < 0)
+            $language = 0xFF;
+        
+        if(!$attendance_state || $attendance_state == '' || !is_numeric($attendance_state) || $attendance_state > 15 || $attendance_state < 0)
+            $attendance_state = 0xFF;
+        
+        
+        $data = sprintf("%06x%02x%02x%02x%02x%02x%02x%02x", $pass, $sleep_time, $volume, $language, $dt_format, $attendance_state, $language_setting_flag, $reserved);
+        
+        $res = $this->request(31, $data);
+        
+        return $res;
+    }
 
     function getInfo2() {
         $res = $this->request(32);
@@ -221,19 +243,19 @@ class PHPAnviz {
 
     function downloadTARecords() {
         $res = $this->request('40', '0201');
-        
+
         if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
             $data = [];
-            
+
             for ($i = 0; $i < hexdec($res['data'][0]); $i++) {
                 $event = [
                     'user_code' => hexdec(implode(array_slice($res['data'], $i * 14 + 1, 5))),
-                    'datetime' => date('Y-m-d H:i:s',  hexdec(implode(array_slice($res['data'], $i * 14 + 6, 4))) + (strtotime('2000-01-01 00:00:00') - strtotime('1970-01-01 02:00:00'))),
-                    'backup_code' => hexdec($res['data'][$i * 14  + 10]),
-                    'record_type' => hexdec($res['data'][$i * 14  + 11]),
+                    'datetime' => date('Y-m-d H:i:s', hexdec(implode(array_slice($res['data'], $i * 14 + 6, 4))) + (strtotime('2000-01-01 00:00:00') - strtotime('1970-01-01 02:00:00'))),
+                    'backup_code' => hexdec($res['data'][$i * 14 + 10]),
+                    'record_type' => hexdec($res['data'][$i * 14 + 11]),
                     'work_type' => hexdec(implode(array_slice($res['data'], $i * 14 + 12, 2))),
                 ];
-                
+
                 $data[] = $event;
             }
         } else {
@@ -242,14 +264,68 @@ class PHPAnviz {
 
         return $data;
     }
-    
-    
-    function clearRecords($type = 0x01, $amount = 0xFFFF){
+
+    function downloadStaffInfo($type = 0x01, $amount = 0x08) {
+        $data = sprintf("%02x%02x", $type, $amount);
+        $res = $this->request('72', $data);
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+            $data = [];
+
+            for ($i = 0; $i < hexdec($res['data'][0]); $i++) {
+                $employee = [
+                    'user_id' => hexdec(implode(array_slice($res['data'], $i * 30 + 1, 5))),
+                    'pwd' => implode(array_slice($res['data'], $i * 30 + 6, 3)),
+                    'card_id' => implode(array_slice($res['data'], $i * 30 + 9, 4)),
+                    'name' => implode(array_slice($res['data'], $i * 30 + 13, 20)),
+                    'department' => $res['data'][$i * 30 + 33],
+                    'group' => $res['data'][$i * 30 + 34],
+                    'attendance_mode' => $res['data'][$i * 30 + 35],
+                    'fp_enroll_state' => implode(array_slice($res['data'], $i * 30 + 36, 2)),
+                    'pwd_8_digit' => $res['data'][$i * 30 + 38],
+                    'keep' => $res['data'][$i * 30 + 39],
+                    'special_info' => $res['data'][$i * 30 + 40],
+                ];
+
+                $data[] = $employee;
+            }
+
+            return $data;
+        }
+
+        return false;
+    }
+
+    function getDeviceId() {
+        $res = $this->request(74);
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+
+            return ['id' => hexdec(implode($res['data']))];
+        }
+
+        return false;
+    }
+
+    function setDeviceId($id) {
+        $data = sprintf('%08x', $id);
+
+        $res = $this->request(75, $data);
         
+        if($res['ret'] == PHPAnviz::ACK_SUCCESS){
+            return $res;
+        } 
+        
+        return false;
+    }
+
+    function clearRecords($type = 0x01, $amount = 0xFFFF) {
+
         $data = sprintf("%02x%04x", $type, $amount);
-        
+
         $res = $this->request('4E', $data);
-        
+
         return $res;
     }
+
 }
