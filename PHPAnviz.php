@@ -10,20 +10,17 @@ class PHPAnviz {
     const ACK_TIME_OUT = 0x08; //capture timeout
     const ACK_USER_OCCUPIED = 0x0A; //user already exists
     const ACK_FINGER_OCCUPIED = 0x0B; //fingerprint already exists
-    
     const CLEAR_ALL = 0x00; //clear all records
     const CLEAR_NEW = 0x01; //clear all "new records" flag
     const CLEAR_NEW_PARTIALY = 0x02; //clear the designated amount of "new records sign"
 
     //device id
+
     private $id;
-    
     //device port
     private $port;
-    
     //gearman client
     private $client;
-    
     //config array
     private $config;
 
@@ -43,7 +40,6 @@ class PHPAnviz {
      * @param string $configFilePath - custom path to config file
      * @return array
      */
-    
     function loadConfig($configFilePath = '') {
         $configFile = $configFilePath == '' ? 'config.ini' : $configFilePath;
 
@@ -90,6 +86,8 @@ class PHPAnviz {
             'length' => $len == -1 ? strlen($data) / 2 : $len
         ];
 
+        print_r($req);
+        
         $res = $this->client->doNormal("Anviz", json_encode($req));
 
         return $this->parseResponse($res);
@@ -298,21 +296,21 @@ class PHPAnviz {
 
         if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
             $data = [];
-
             for ($i = 0; $i < hexdec($res['data'][0]); $i++) {
                 $employee = [
-                    'user_id' => hexdec(implode(array_slice($res['data'], $i * 30 + 1, 5))),
-                    'pwd' => implode(array_slice($res['data'], $i * 30 + 6, 3)),
-                    'card_id' => implode(array_slice($res['data'], $i * 30 + 9, 4)),
-                    'name' => implode(array_slice($res['data'], $i * 30 + 13, 20)),
-                    'department' => $res['data'][$i * 30 + 33],
-                    'group' => $res['data'][$i * 30 + 34],
-                    'attendance_mode' => $res['data'][$i * 30 + 35],
-                    'fp_enroll_state' => implode(array_slice($res['data'], $i * 30 + 36, 2)),
-                    'pwd_8_digit' => $res['data'][$i * 30 + 38],
-                    'keep' => $res['data'][$i * 30 + 39],
-                    'special_info' => $res['data'][$i * 30 + 40],
+                    'user_id' => hexdec(implode(array_slice($res['data'], $i * 40 + 1, 5))),
+                    'pwd' => hexdec($res['data'][$i * 40 + 6][1] . implode(array_slice($res['data'], $i * 40 + 7, 2))),
+                    'card_id' => hexdec(implode(array_slice($res['data'], $i * 40 + 9, 4))),
+                    'name' => $this->hex2str(implode(array_slice($res['data'], $i * 40 + 13, 20))),
+                    'department' => $res['data'][$i * 40 + 33],
+                    'group' => $res['data'][$i * 40 + 34],
+                    'attendance_mode' => $res['data'][$i * 40 + 35],
+                    'fp_enroll_state' => implode(array_slice($res['data'], $i * 40 + 36, 2)),
+                    'pwd_8_digit' => $res['data'][$i * 40 + 38],
+                    'keep' => $res['data'][$i * 40 + 39],
+                    'special_info' => $res['data'][$i * 40 + 40],
                 ];
+
 
                 $data[] = $employee;
             }
@@ -323,15 +321,55 @@ class PHPAnviz {
         return false;
     }
 
+    function fixName($name){
+        $i = 0;
+        
+        $newName = '';
+        
+        while(strlen($newName) < 40){
+            $newName .= '00' . $name[$i] . $name[$i+1];
+            $i += 2;
+        }
+        
+        return $newName;
+    }
+    
+    function uploadStaffInfo($id, $pwd, $card_id, $name, $dept_id, $group_id) {
+        
+        $name = unpack('H*', $name);
+        
+        $name = $this->fixName($name[1]);
+
+        $employee = [
+            'user_id' => sprintf('%010x', $id),
+            'pwd' => sprintf('%01x%05x', 5, $pwd),
+            'card_id' => sprintf('%08x', $card_id),
+            'name' => sprintf('%040s', $name),
+            'department' => sprintf('%02x', $dept_id),
+            'group' => sprintf('%02x', $group_id),
+            'attendance_mode' => '00',
+            'fp_enroll_state' => '0000',
+            'pwd_8_digit' => '00',
+            'keep' => '00',
+            'special_info' => '00',
+        ];
+        print_r($employee);
+        $data = '01' . implode($employee);
+        
+        $res = $this->request('73', $data, 41);
+        
+        return $res;
+    }
+
     function getDeviceId() {
         $res = $this->request(74);
 
         if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
-            
+
             $data = [
                 'id' => hexdec(implode($res['data']))
             ];
-            
+
             return $data;
         }
 
@@ -355,7 +393,7 @@ class PHPAnviz {
         $data = sprintf("%02x%04x", $type, $amount);
 
         $res = $this->request('4E', $data);
-        
+
         if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
             return true;
         }
