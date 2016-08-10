@@ -8,15 +8,24 @@ class PHPAnviz {
     private $id;
     private $port;
     private $client;
+    private $config;
 
-    function __construct($id, $port) {
+    function __construct($id, $port, $configFilePath = '') {
         $port = substr($port, 0, 1) != ":" ? ":" . $port : $port;
 
         $this->id = $id;
         $this->port = $port;
 
+        $this->config = $this->loadConfig($configFilePath);
+
         $this->client = new GearmanClient();
-        $this->client->addServer("jerko.novi-net.net");
+        $this->client->addServer($this->config['gearman-server']);
+    }
+
+    function loadConfig($configFilePath = '') {
+        $configFile = $configFilePath == '' ? 'config.ini' : $configFilePath;
+
+        return parse_ini_file($configFile);
     }
 
     private function parseResponse($res) {

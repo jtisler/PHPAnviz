@@ -1,0 +1,4 @@
+;replace values in file and rename it to config.ini
+
+[config]
+gearman-server=your.server.address
