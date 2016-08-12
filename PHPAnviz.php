@@ -2,6 +2,10 @@
 
 class PHPAnviz {
 
+    /**
+     * CRC Table
+     * @var array
+     */
     protected $crc_table = [
         0x0000, 0x1189, 0x2312, 0x329B, 0x4624, 0x57AD, 0x6536, 0x74BF, 0x8C48, 0x9DC1,
         0xAF5A, 0xBED3, 0xCA6C, 0xDBE5, 0xE97E, 0xF8F7, 0x1081, 0x0108, 0x3393, 0x221A,
@@ -31,41 +35,128 @@ class PHPAnviz {
         0x58D5, 0x495C, 0x3DE3, 0x2C6A, 0x1EF1, 0x0F78
     ];
 
-    const ACK_SUCCESS = 0x00; //operation successful
-    const ACK_FAIL = 0x01; //operation failed
-    const ACK_FULL = 0x04; //user full
-    const ACK_EMPTY = 0x05; //user empty
-    const ACK_NO_USER = 0x06; //user does not exist
-    const ACK_TIME_OUT = 0x08; //capture timeout
-    const ACK_USER_OCCUPIED = 0x0A; //user already exists
-    const ACK_FINGER_OCCUPIED = 0x0B; //fingerprint already exists
-    const CLEAR_ALL = 0x00; //clear all records
-    const CLEAR_NEW = 0x01; //clear all "new records" flag
-    const CLEAR_NEW_PARTIALY = 0x02; //clear the designated amount of "new records sign"
+    /**
+     * Operation successfull
+     */
+    const ACK_SUCCESS = 0x00;
 
-    //device id
+    /**
+     * Operation failed
+     */
+    const ACK_FAIL = 0x01;
 
+    /**
+     * User full
+     */
+    const ACK_FULL = 0x04;
+
+    /**
+     * User empty
+     */
+    const ACK_EMPTY = 0x05;
+
+    /**
+     * User does not exist
+     */
+    const ACK_NO_USER = 0x06;
+
+    /**
+     * Capture timeout
+     */
+    const ACK_TIME_OUT = 0x08;
+
+    /**
+     * User already exists
+     */
+    const ACK_USER_OCCUPIED = 0x0A;
+
+    /**
+     * Fingerprint already exists
+     */
+    const ACK_FINGER_OCCUPIED = 0x0B;
+
+    /**
+     * Clear all records
+     */
+    const CLEAR_ALL = 0x00;
+
+    /**
+     * Clear all "new records" flag
+     */
+    const CLEAR_NEW = 0x01;
+
+    /**
+     * Clear the designated amount of "new records" flag
+     */
+    const CLEAR_NEW_PARTIALY = 0x02;
+
+    /**
+     * Restart; retrieve all the records (The first data packet must send this data when retrieving all the records)
+     */
+    const DOWNLOAD_ALL = 0x01;
+
+    /**
+     * Restart; retrieve new records (The first data packet must send this data when retrieving the new records)
+     */
+    const DOWNLOAD_NEW = 0x02;
+
+    /**
+     * Device ID
+     * @var hex 
+     * @access private
+     */
     private $id;
-    //device port
+
+    /**
+     * Device port
+     * @var string
+     * @access private 
+     */
     private $port;
-    //gearman client
+
+    /**
+     * Instance of GearmanClient
+     * @var GearmanClient
+     * @access private 
+     */
     private $client;
-    //config array
+
+    /**
+     * Config array
+     * @var array
+     * @access private 
+     */
     private $config;
 
+    /**
+     * Constructor
+     * @param int $id
+     * @param int $port
+     * @param string $configFilePath
+     */
     function __construct($id, $port, $configFilePath = '') {
+        //Check if port has : prefix, if not add one
         $port = substr($port, 0, 1) != ":" ? ":" . $port : $port;
 
         $this->id = dechex($id);
         $this->port = $port;
 
+        //Create config
         $this->config = $this->loadConfig($configFilePath);
 
+        //Create instance of Gearman Client
         $this->client = new GearmanClient();
+        //Add server
         $this->client->addServer($this->config['gearman-server']);
     }
 
-    function crc16($b) {
+    /**
+     * Calculate crc16
+     * @param binary $b
+     * @return string
+     * @access private
+     */
+    private function crc16($b) {
         $crc = 0xFFFF;
 
         for ($l = 0; $l < strlen($b); $l++) {
@@ -73,19 +164,21 @@ class PHPAnviz {
             $crc = ($crc >> 8) ^ $this->crc_table[$crc & 255];
         }
 
-        $res = strtoupper(dechex($crc));
+        $crc = strtoupper(dechex($crc));
 
         //if crc has length less than 4 add leading zero
-        $res = sprintf("%04s", $res);
+        $crc = sprintf("%04s", $crc);
 
-        return($res[2] . $res[3] . $res[0] . $res[1]);
+        return($crc[2] . $crc[3] . $crc[0] . $crc[1]);
     }
 
     /**
+     * Parse ini file and return it as array
      * @param string $configFilePath - custom path to config file
      * @return array
+     * @access private
      */
-    function loadConfig($configFilePath = '') {
+    private function loadConfig($configFilePath = '') {
         $configFile = $configFilePath == '' ? 'config.ini' : $configFilePath;
 
         return parse_ini_file($configFile);
@@ -95,6 +188,7 @@ class PHPAnviz {
      * Converts hex to string
      * @param string $hex
      * @return string
+     * @access private
      */
     private function hex2str($hex) {
         $str = '';
@@ -105,55 +199,119 @@ class PHPAnviz {
         return $str;
     }
 
-    private function parseResponse($response) {
+    /**
+     * Convert response from:
+     * 
+     * STX      CH(device code)     ACK(response)               RET(return)     LEN(data length)    DATA            CRC16
+     * 0xA5     4 Bytes             1 Byte(command + 0x80)      1 Byte          2 Bytes             0-400 Bytes     2 Bytes
+     * 
+     * to array
+     * 
+     * @param string|array $response
+     * @param int $type
+     * @return array
+     * @access private
+     */
+    private function parseResponse($response, $type) {
+        //if type is 1 it means that multiple commands were send, so we need to parse all responses we got
+        if ($type == 1) {
+            foreach ($response as $res) {
 
-        $output = [];
+                $resArr = str_split($res, 2);
 
-        foreach ($response as $res) {
-            $resArr = str_split($res, 2);
+                $json['stx'] = implode(array_slice($resArr, 0, 1));
+                $json['ch'] = hexdec(implode(array_slice($resArr, 1, 4)));
+                $json['ack'] = hexdec(implode(array_slice($resArr, 5, 1)));
+                $json['ret'] = implode(array_slice($resArr, 6, 1));
+                $json['len'] = hexdec(implode(array_slice($resArr, 7, 2)));
+                $json['data'] = array_slice($resArr, 9, $json['len']);
+                $json['crc'] = implode(array_slice($resArr, -2, 2));
+
+                $output[] = $json;
+            }
+        } else { //type = 0, single response
+            $resArr = str_split($response, 2);
 
             $json['stx'] = implode(array_slice($resArr, 0, 1));
             $json['ch'] = hexdec(implode(array_slice($resArr, 1, 4)));
-            $json['ack'] = implode(array_slice($resArr, 5, 1));
+            $json['ack'] = hexdec(implode(array_slice($resArr, 5, 1)));
             $json['ret'] = implode(array_slice($resArr, 6, 1));
             $json['len'] = hexdec(implode(array_slice($resArr, 7, 2)));
             $json['data'] = array_slice($resArr, 9, $json['len']);
             $json['crc'] = implode(array_slice($resArr, -2, 2));
 
-            $output[] = $json;
+            $output = $json;
         }
+
 
         return $output;
     }
 
-    function buildRequest($command, $data = '', $len = -1) {
-
+    /**
+     * Convert command, data and length to this format:
+     * 
+     * STX      CH(device code)     CMD(command)    LEN(data length)    DATA            CRC16
+     * 0xA5     4 Bytes             1 Byte          2 Bytes             0-400 Bytes     2 Bytes
+     * 
+     * @param hex $command
+     * @param string $data
+     * @param int $len
+     * @return string
+     * @access private
+     */
+    private function buildRequest($command, $data = '', $len = -1) {
         $len = $len == -1 ? strlen($data) / 2 : $len;
-
-        $req = sprintf("A5%08x%02x%04x%s", $this->id, $command, $len, $data);
-
+        $req = sprintf("A5%08s%02x%04x%s", $this->id, $command, $len, $data);
         $req .= $this->crc16(hex2bin($req));
 
         return $req;
     }
 
-    private function request($commands) {
+    /**
+     * Send commands to device and parse response/s
+     * @param string|array $commands
+     * @param int $type
+     * @return parseResponse
+     * @access private
+     */
+    private function request($commands, $type = 0) {
 
+        //if commands are string convert them to an array
+        $commands = is_array($commands) ? $commands : [$commands];
+
+        //build request array
         $req = [
             'id' => $this->id,
             'port' => $this->port,
-            'command' => $commands
+            'command' => $commands,
+            'type' => $type
         ];
 
+        //send request to gearman job server
         $res = $this->client->doNormal("Anviz", json_encode($req));
 
-        return $this->parseResponse(json_decode($res));
+        //if type is 1 that means that we might receive multiple responses so we must decode them to array
+        if ($type == 1) {
+            $res = json_decode($res);
+        }
+
+        //parse all the responses we've got from device
+        return $this->parseResponse($res, $type);
     }
 
-    function getInfo1() {
-        $res = $this->request(30);
+    /**
+     * Get the firmware version, communication password, sleep time, volume, language, date
+      and time format, attendance state, language setting flag, command version
+     * @return array|false
+     * @access public
+     */
+    public function getInfo1() {
 
-        if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+        $commands = $this->buildRequest(0x30);
+
+        $res = $this->request($commands);
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xB0) {
             $data = [
                 'firmware_version' => $this->hex2str(implode(array_slice($res['data'], 0, 8))),
                 'pass_length' => hexdec($res['data'][8][0]),
@@ -173,7 +331,20 @@ class PHPAnviz {
         return false;
     }
 
-    function setInfo1($pass = 0xFFFFFF, $sleep_time = 0xFF, $volume = 0xFF, $language = 0xFF, $dt_format = 0xFF, $attendance_state = 0xFF, $language_setting_flag = 0xFF, $reserved = 0x00) {
+    /**
+     * Set the communication password, sleep time, volume, language, date format, attendance state, and language setting flag.
+     * @param string $pass
+     * @param int|hex $sleep_time
+     * @param int|hex $volume
+     * @param int|hex $language
+     * @param int|hex $dt_format
+     * @param int|hex $attendance_state
+     * @param int|hex $language_setting_flag
+     * @return boolean
+     * @access public
+     */
+    public function setInfo1($pass = 0xFFFFFF, $sleep_time = 0xFF, $volume = 0xFF, $language = 0xFF, $dt_format = 0xFF, $attendance_state = 0xFF, $language_setting_flag = 0xFF) {
+        $reserved = 0x00;
 
         if (!$sleep_time || $sleep_time == '' || !is_numeric($sleep_time) || $sleep_time > 250 || $sleep_time < 0)
             $sleep_time = 0xFF;
@@ -190,19 +361,31 @@ class PHPAnviz {
 
         $data = sprintf("%06x%02x%02x%02x%02x%02x%02x%02x", $pass, $sleep_time, $volume, $language, $dt_format, $attendance_state, $language_setting_flag, $reserved);
 
-        $res = $this->request(31, $data);
+        $commands = $this->buildRequest(0x31, $data);
 
-        if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+        $res = $this->request($commands);
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xB1) {
             return true;
         }
 
         return false;
     }
 
-    function getInfo2() {
-        $res = $this->request(32);
+    /**
+     * Get the T&A device Compare Precision, Fixed Wiegand Head Code, Wiegand Option,
+     * Work code permission, real-time mode setting, FP auto update setting, relay mode,
+     * Lock delay, Memory full alarm, Repeat attendance delay, door sensor delay, scheduled
+     * bell delay.
+     * @return array|false
+     * @access public
+     */
+    public function getInfo2() {
+        $commands = $this->buildRequest(0x32);
 
-        if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+        $res = $this->request($commands);
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xB2) {
             $data = [
                 'fingerprint_comparison_precision' => hexdec($res['data'][0]),
                 'fixed_wiegand_head_code' => hexdec($res['data'][1]),
@@ -225,35 +408,53 @@ class PHPAnviz {
         return false;
     }
 
-    function getDateTime($format = 'Y-m-d H:i:s') {
-        $commands = [
-            0 => $this->buildRequest(0x38)
-        ];
-
-        $resArr = $this->request($commands);
-
-        $output = [];
-
-        foreach ($resArr as $res) {
-            if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
-                $data = $res['data'];
-
-                foreach ($data as $key => $value) {
-                    $data[$key] = hexdec($value);
-                }
-
-                $date = sprintf('20%02d-%02d-%02d %02d:%02d:%02d', $data[0], $data[1], $data[2], $data[3], $data[4], $data[5]);
-
-                $output[] = date($format, strtotime($date));
-            } else {
-                $output[] = false;
-            }
-        }
-
-        return $output;
+    /**
+     * Set the T&A device Compare Precision, Fixed Wiegand Head Code, Wiegand Option,
+     * Work code permission, real-time mode setting, FP auto update setting, relay mode,
+     * Lock delay, Memory full alarm, Repeat attendance delay, door sensor delay, scheduled
+     * bell delay.
+     * @return array|false
+     * @access public
+     */
+    public function setInfo2() {
+        // TO DO
     }
 
-    function setDateTime($dateTime = '') {
+    /**
+     * Get the date and time of T&A
+     * @param string $format Date Time format. Default is 'Y-m-d H:i:s'
+     * @return string|false
+     * @access public
+     */
+    public function getDateTime($format = 'Y-m-d H:i:s') {
+        $commands = $this->buildRequest(0x38);
+
+        $res = $this->request($commands);
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xB8) {
+            $data = $res['data'];
+
+            foreach ($data as $key => $value) {
+                $data[$key] = hexdec($value);
+            }
+
+            $date = sprintf('20%02d-%02d-%02d %02d:%02d:%02d', $data[0], $data[1], $data[2], $data[3], $data[4], $data[5]);
+
+            $output = date($format, strtotime($date));
+
+            return $output;
+        }
+
+        return false;
+    }
+
+    /**
+     * Set the date and time of T&A
+     * @param string $dateTime (optional) If not set, current datetime will be set
+     * @return boolean
+     * @access public
+     */
+    public function setDateTime($dateTime = '') {
         if ($dateTime == '') {
             $ts = [
                 0 => date('Y') - 2000,
@@ -282,123 +483,175 @@ class PHPAnviz {
 
         $data = implode($ts);
 
-        $res = $this->request(39, $data);
+        $commands = $this->buildRequest(0x39, $data);
 
-        if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+        $res = $this->request($commands);
+
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xB9) {
             return true;
         }
 
         return false;
     }
 
-    function getTCPIPParameters() {
+    /**
+     * Get the IP address, subnet Mask, MAC address, Default gateway, Server IP address,Far limit, Com port NO., TCP/IP mode, DHCP limit.
+     * @return array|boolean
+     */
+    public function getTCPIPParameters() {
 
-        $commands = [$this->buildRequest(0x3A)];
+        $commands = $this->buildRequest(0x3A);
 
-        $resArr = $this->request($commands);
+        $res = $this->request($commands);
+
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xBA) {
+
+            $data = [
+                'ip_address' => long2ip(hexdec(implode(array_slice($res['data'], 0, 4)))),
+                'subnet_mask' => long2ip(hexdec(implode(array_slice($res['data'], 4, 4)))),
+                'mac_address' => implode(array_slice($res['data'], 8, 6)),
+                'default_gateway' => long2ip(hexdec(implode(array_slice($res['data'], 14, 4)))),
+                'server_ip' => long2ip(hexdec(implode(array_slice($res['data'], 18, 4)))),
+                'far_limit' => hexdec($res['data'][22]),
+                'comm_port' => hexdec(implode(array_slice($res['data'], 23, 2))),
+                'tcpip_mode' => hexdec($res['data'][25]),
+                'dhcp_limit' => hexdec($res['data'][26])
+            ];
+            $output = $data;
+
+            return $output;
+        }
+
+        return false;
+    }
+
+    function setTCPIPParameters() {
+        //TODO
+    }
+
+    /**
+     * Get record information, including the amount of Used User, Used FP, Used Password, Used Card, All Attendance Record, and New Record.
+     * @return array|boolean
+     * @access public
+     */
+    public function getRecordInformation() {
+
+        $commands = $this->buildRequest(0x3C);
+
+        $res = $this->request($commands, 0);
 
         $output = [];
 
-        foreach ($resArr as $res) {
-            if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xBC) {
 
-                $data = [
-                    'ip_address' => long2ip(hexdec(implode(array_slice($res['data'], 0, 4)))),
-                    'subnet_mask' => long2ip(hexdec(implode(array_slice($res['data'], 4, 4)))),
-                    'mac_address' => implode(array_slice($res['data'], 8, 6)),
-                    'default_gateway' => long2ip(hexdec(implode(array_slice($res['data'], 14, 4)))),
-                    'server_ip' => long2ip(hexdec(implode(array_slice($res['data'], 18, 4)))),
-                    'far_limit' => hexdec($res['data'][22]),
-                    'comm_port' => implode(array_slice($res['data'], 23, 2)),
-                    'tcpip_mode' => hexdec($res['data'][25]),
-                    'dhcp_limit' => hexdec($res['data'][26])
-                ];
-                $output[] = $data;
-            } else {
-                $output[] = false;
-            }
+            $data = [
+                'user_amount' => hexdec(implode(array_slice($res['data'], 0, 3))),
+                'fp_amount' => hexdec(implode(array_slice($res['data'], 3, 3))),
+                'password_amount' => hexdec(implode(array_slice($res['data'], 6, 3))),
+                'card_amount' => hexdec(implode(array_slice($res['data'], 9, 3))),
+                'all_record_amount' => hexdec(implode(array_slice($res['data'], 12, 3))),
+                'new_record_amount' => hexdec(implode(array_slice($res['data'], 15, 3))),
+            ];
+
+            $output = $data;
+
+            return $output;
         }
 
-        return $output;
+        return false;
     }
 
-    function getRecordInformation() {
-        $commands = [$this->buildRequest(0x3C)];
-
-        $resArr = $this->request($commands);
-
-        $output = [];
-
-        foreach ($resArr as $res) {
-            if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
-                $data = [
-                    'user_amount' => hexdec(implode(array_slice($res['data'], 0, 3))),
-                    'fp_amount' => hexdec(implode(array_slice($res['data'], 3, 3))),
-                    'password_amount' => hexdec(implode(array_slice($res['data'], 6, 3))),
-                    'card_amount' => hexdec(implode(array_slice($res['data'], 9, 3))),
-                    'all_record_amount' => hexdec(implode(array_slice($res['data'], 11, 3))),
-                    'new_record_amount' => hexdec(implode(array_slice($res['data'], 15, 3))),
-                ];
-
-                $output[] = $data;
-            } else {
-                $output[] = false;
-            }
-        }
-
-        return $output;
-    }
-
-    function downloadTARecords() {
+    /**
+     * download record, the downloading max number is 25 each time.(record data length: 25*14 = 350Byte)
+     * @param hex $type @see constant DOWNLOAD_*
+     * @return array
+     */
+    public function downloadTARecords($type = PHPAnviz::DOWNLOAD_NEW) {
         $recordInfo = $this->getRecordInformation();
 
-        $commands[0] = $this->buildRequest(0x40, '0219');
-
-        for ($i = 25; $i < $recordInfo[0]['new_record_amount']; $i += 25) {
-            $commands[] = $this->buildRequest(0x40, '0019');
+        if ($type == PHPAnviz::DOWNLOAD_NEW) {
+            $maxRecords = $recordInfo['new_record_amount'];
+            $deleteAmount = $maxRecords;
+        } else {
+            $maxRecords = $recordInfo['all_record_amount'];
+            $deleteAmount = 0x00;
         }
 
-        $resArr = $this->request($commands);
-         
+        $num = min(25, $maxRecords);
+
+        $data = sprintf("%02x%02x", $type, $num);
+
+        $commands[0] = $this->buildRequest(0x40, $data);
+        $maxRecords -= $num;
+
+        while ($maxRecords > 0) {
+            $num = min(25, $maxRecords);
+            $data = sprintf("%02x%02x", 0, $num);
+
+            $commands[] = $this->buildRequest(0x40, $data);
+            $maxRecords -= $num;
+        }
+
+        $resArr = $this->request($commands, 1);
+
         $data = [];
 
         foreach ($resArr as $res) {
-            if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+            if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xC0) {
 
                 for ($i = 0; $i < hexdec($res['data'][0]); $i++) {
                     $event = [
                         'user_code' => hexdec(implode(array_slice($res['data'], $i * 14 + 1, 5))),
                         'datetime' => date('Y-m-d H:i:s', hexdec(implode(array_slice($res['data'], $i * 14 + 6, 4))) + (strtotime('2000-01-01 00:00:00') - strtotime('1970-01-01 02:00:00'))),
                         'backup_code' => hexdec($res['data'][$i * 14 + 10]),
-                        'record_type' => hexdec($res['data'][$i * 14 + 11]),
+                        'record_type' => (int) substr(base_convert($res['data'][$i * 14 + 11], 16, 2), 1),
                         'work_type' => hexdec(implode(array_slice($res['data'], $i * 14 + 12, 2))),
                     ];
 
                     $data[] = $event;
+                }
 
+                if ($type == PHPAnviz::DOWNLOAD_NEW) {
+                    $this->clearRecords(PHPAnviz::CLEAR_NEW_PARTIALY, $deleteAmount);
                 }
             }
         }
-        
-        return $data;
 
+
+
+        return $data;
     }
 
-    function downloadStaffInfo($type = 0x00, $amount = 0xFF) {
+    /**
+     * download staff information
+     * @return array
+     * @access public
+     */
+    public function downloadStaffInfo() {
 
         $recordInfo = $this->getRecordInformation();
 
-        $data = sprintf("%02s%02s", '01', '08');
-        $commands[0] = $this->buildRequest('72', $data);
-//        $data = sprintf("%02s%02s", '00', '08');
-//        $commands[] = $this->buildRequest('72', $data);
+        $maxUsers = $recordInfo['user_amount'];
+        $num = min(8, $maxUsers);
+        $data = sprintf("%02x%02x", 0x01, $num);
+        $commands[0] = $this->buildRequest(0x72, $data);
+        $maxUsers -= $num;
 
-        $resArr = $this->request($commands);
+        while ($maxUsers > 0) {
+            $num = min(8, $maxUsers);
+            $data = sprintf("%02x%02x", 0x00, $num);
+            $commands[] = $this->buildRequest(0x72, $data);
+            $maxUsers -= $num;
+        }
+
+        $resArr = $this->request($commands, 1);
 
         $final = [];
 
         foreach ($resArr as $res) {
-            if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
+            if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xF2) {
                 for ($i = 0; $i < hexdec($res['data'][0]); $i++) {
                     $employee = [
                         'user_id' => hexdec(implode(array_slice($res['data'], $i * 40 + 1, 5))),
@@ -422,7 +675,13 @@ class PHPAnviz {
         return $final;
     }
 
-    function fixName($name) {
+    /**
+     * Add 00 before every byte
+     * @param string $name
+     * @return string
+     * @access private
+     */
+    private function fixName($name) {
         $i = 0;
 
         $newName = '';
@@ -435,6 +694,13 @@ class PHPAnviz {
         return $newName;
     }
 
+    /**
+     * upload staff information. If user data is empty, set it as 0xFF. For instance, card Id set as 0xFF if user don’t enroll card. 
+     * FP enroll state can not set, this value is 0
+     * @param array $users
+     * @return boolean
+     * @access public
+     */
     function uploadStaffInfo($users) {
 
         $employees = [];
@@ -447,8 +713,8 @@ class PHPAnviz {
 
             $employee = [
                 'user_id' => sprintf('%010x', $user[0]),
-                'pwd' => sprintf('%06x', 0xFFFFFF),
-                'card_id' => sprintf('%08x', 0xFFFFFFFF), //$user[2]),
+                'pwd' => sprintf('%06x', $user[1]),
+                'card_id' => sprintf('%08x', $user[2]), //$user[2]);
                 'name' => sprintf('%040s', $name),
                 'department' => sprintf('%02x', 0xFF),
                 'group' => sprintf('%02x', 0xFF),
@@ -464,21 +730,52 @@ class PHPAnviz {
 
         $data = sprintf("%02x", count($employees)) . implode($employees);
 
-        $commands = [$this->buildRequest(73, $data)];
+        $commands = $this->buildRequest(0x73, $data);
 
         $res = $this->request($commands);
 
-        return $res;
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xF3) {
+            return true;
+        }
+
+        return false;
     }
 
-    function getDeviceId() {
-        $res = $this->request(74);
+    /**
+     * Download FP Template from T&A device
+     * @param int $user
+     * @param hex $backup_code
+     * @return FP Template|false
+     * @access public
+     */
+    public function downloadFPTemplate($user, $backup_code = 0x01) {
+        $data = sprintf('%010x%02x', $user, $backup_code);
+
+        $commands = $this->buildRequest(0x44, $data);
+
+        $res = $this->request($commands);
+
+        $output = [];
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xC4) {
+            return implode($res['data']);
+        }
+
+        return false;
+    }
+
+    /**
+     * Get device ID which we set in device.
+     * @return int|false
+     * @access public
+     */
+    public function getDeviceId() {
+        $commands = $this->buildRequest(0x74);
+
+        $res = $this->request($commands);
 
         if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
-
-            $data = [
-                'id' => hexdec(implode($res['data']))
-            ];
+            $data = hexdec(implode($res['data']));
 
             return $data;
         }
@@ -486,7 +783,13 @@ class PHPAnviz {
         return false;
     }
 
-    function setDeviceId($id) {
+    /**
+     * Modify device ID in device menu
+     * @param int $id
+     * @return boolean
+     * @access public
+     */
+    public function setDeviceId($id) {
         $data = sprintf('%08x', $id);
 
         $res = $this->request(75, $data);
@@ -498,45 +801,63 @@ class PHPAnviz {
         return false;
     }
 
-    function clearUsers() {
+    /**
+     * Initialize all the user data area, clear all the staff info, FP data, password/card data
+     * @return boolean
+     * @access public
+     */
+    public function clearUsers() {
 
-        $commands[] = $this->buildRequest('4D');
+        $commands[] = $this->buildRequest(0x4D);
 
-        print_r($commands);
 
-        $resArr = $this->request($commands);
+        $res = $this->request($commands);
 
-        $output = [];
 
-        foreach ($resArr as $res) {
-            if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
-                $output[] = true;
-            } else {
-                $output[] = false;
-            }
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xCD) {
+            return true;
         }
 
-        return $output;
+        return false;
     }
 
-    function clearRecords($type = 0x01, $amount = 0xFFFF) {
+    /**
+     * Cancel all records, or cancel all/part new records sign.
+     * @param hex $type @see const CLEAR_*
+     * @param hex $amount
+     * @return boolean
+     * @access public
+     */
+    public function clearRecords($type = PHPAnviz::CLEAR_NEW, $amount = 0xFFFF) {
 
         $data = sprintf("%02x%04x", $type, $amount);
 
-        $commands = $this->buildRequest('4E', $data);
+        $commands = $this->buildRequest(0x4E, $data);
 
-        $resArr = $this->request($commands);
-        $output = [];
+        $res = $this->request($commands);
 
-        foreach ($resArr as $res) {
-            if ($res['ret'] == PHPAnviz::ACK_SUCCESS) {
-                $output[] = true;
-            } else {
-                $output[] = false;
-            }
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xCE) {
+            return true;
         }
 
-        return $output;
+        return false;
+    }
+
+    /**
+     * Force T&A device output signal to open door
+     * @return boolean
+     * @access public
+     */
+    public function openDoor() {
+        $commands = $this->buildRequest(0x5E);
+
+        $res = $this->request($commands);
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xDE) {
+            return true;
+        }
+
+        return false;
     }
 
 }
