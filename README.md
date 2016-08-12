@@ -1,5 +1,5 @@
 ## PHPAnviz
-PHP library to access and control Anviz devices from web
+PHP library to access and control Anviz devices
 
 ### Version
 0.9.0
