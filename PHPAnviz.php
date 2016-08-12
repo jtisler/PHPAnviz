@@ -1,10 +1,23 @@
 <?php
 
+/**
+ * PHPAnviz - PHP library for communication with ANVIZ devices
+ * PHP Version 5 +
+ * @package PHPAnviz
+ * @link https://github.com/jtisler/phpAnviz PHPAnviz github project
+ * @author Jerko Tisler <jerko.tisler@gmail.com>
+ * @copyright (c) 2016, Jerko Tisler
+ * @license https://opensource.org/licenses/MIT MIT
+ * 
+ */
+
+
 class PHPAnviz {
 
     /**
      * CRC Table
      * @var array
+     * @access protected
      */
     protected $crc_table = [
         0x0000, 0x1189, 0x2312, 0x329B, 0x4624, 0x57AD, 0x6536, 0x74BF, 0x8C48, 0x9DC1,
@@ -301,7 +314,7 @@ class PHPAnviz {
 
     /**
      * Get the firmware version, communication password, sleep time, volume, language, date
-      and time format, attendance state, language setting flag, command version
+     * and time format, attendance state, language setting flag, command version
      * @return array|false
      * @access public
      */
