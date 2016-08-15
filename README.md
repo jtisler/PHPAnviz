@@ -24,6 +24,8 @@ I'm recommending you to get Supervisor and run server with it or start the serve
 $ ./anviz-server
 ```
 
+You can download source of anviz-server <a href="https://github.com/jtisler/anviz">here</a>
+
 ### Code & Functions
 Before we start, open `config.ini.example` and change gearman-server address, save file and create `config.ini`
 
