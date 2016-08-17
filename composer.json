@@ -2,7 +2,7 @@
     {
         "type": "package",
         "package": {
-            "name": "jtisler/PHPAnviz",
+            "name": "jtisler/phpanviz",
             "version": "0.9.0",
             "source": {
                 "url": "git://github.com/jtisler/PHPAnviz.git",
