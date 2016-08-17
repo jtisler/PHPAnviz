@@ -1,0 +1,14 @@
+"repositories": [
+    {
+        "type": "package",
+        "package": {
+            "name": "jtisler/PHPAnviz",
+            "version": "0.9.0",
+            "source": {
+                "url": "git://github.com/jtisler/PHPAnviz.git",
+                "type": "git",
+                "reference": "master"
+            }
+        }
+    }
+],
