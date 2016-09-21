@@ -21,7 +21,7 @@ $ chmod +x anviz-server
 
 I'm recommending you to get Supervisor and run server with it or start the server mannually:
 ```sh
-$ ./anviz-server
+$ ./anviz-server_xYour_arch
 ```
 
 You can download source of anviz-server <a href="https://github.com/jtisler/anviz">here</a>
