@@ -10,7 +10,6 @@
  * @license https://opensource.org/licenses/MIT MIT
  * 
  */
-
 class PHPAnviz {
 
     /**
@@ -48,8 +47,8 @@ class PHPAnviz {
     ];
 
     /**
-    * Anviz devices are calculating time since 2000-01-01 (for gathering records this it seems it's 2000-01-02 instead of 2000-01-01)
-    */
+     * Anviz devices are calculating time since 2000-01-01 (for gathering records this it seems it's 2000-01-02 instead of 2000-01-01)
+     */
     const ANVIZ_EPOCH = 946767600;
 
     /**
@@ -165,7 +164,6 @@ class PHPAnviz {
         $this->client = new GearmanClient();
         //Add server
         $this->client->addServer($this->config['gearman-server']);
-
     }
 
     /**
@@ -862,7 +860,7 @@ class PHPAnviz {
     }
 
     /**
-     * Force T&A device output signal to open door
+     * Force T&A device output signal to open door without verifying user
      * @return boolean
      * @access public
      */
@@ -875,6 +873,56 @@ class PHPAnviz {
             return true;
         }
 
+        return false;
+    }
+
+    /**
+     * Get T&A states from device
+     * @return array | boolean
+     * @access public
+     */
+    public function getTAStateTable() {
+        $commands = $this->buildRequest(0x5A);
+
+        $res = $this->request($commands);
+
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xDA) {
+            foreach ($res['data'] as $key => $value) {
+                $res['data'][$key] = $value == 'FF' ? null : $this->hex2str($value);
+            }
+
+            return $res['data'];
+        }
+
+        return false;
+    }
+
+    /**
+     * Set T&A state table. Max 16 different states. 
+     * @param array $states
+     * @return boolean
+     * @access public
+     */
+    public function setTAStateTable($states) {
+        
+        //check if state element is empty or invalid and replace it with FF
+        for ($i = 0; $i < 16; $i++) {
+            if (!isset($states[$i]) || $states[$i] == '' || is_null($states[$i]) || $states[$i] == 'FF') {
+                $states[$i] = 'FF';
+            } else {
+                $states[$i] = unpack('H*', $states[$i])[1];
+            }
+        }
+
+        $commands = $this->buildRequest(0x5B, implode($states));
+
+        $res = $this->request($commands);
+        
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xDB) {
+            return true;
+        }
+        
         return false;
     }
 
