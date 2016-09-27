@@ -11,7 +11,6 @@
  * 
  */
 
-
 class PHPAnviz {
 
     /**
@@ -47,6 +46,11 @@ class PHPAnviz {
         0xF78F, 0xE606, 0xD49D, 0xC514, 0xB1AB, 0xA022, 0x92B9, 0x8330, 0x7BC7, 0x6A4E,
         0x58D5, 0x495C, 0x3DE3, 0x2C6A, 0x1EF1, 0x0F78
     ];
+
+    /**
+    * Anviz devices are calculating time since 2000-01-01 (for gathering records this it seems it's 2000-01-02 instead of 2000-01-01)
+    */
+    const ANVIZ_EPOCH = 946767600;
 
     /**
      * Operation successfull
@@ -161,6 +165,7 @@ class PHPAnviz {
         $this->client = new GearmanClient();
         //Add server
         $this->client->addServer($this->config['gearman-server']);
+
     }
 
     /**
@@ -617,7 +622,7 @@ class PHPAnviz {
                 for ($i = 0; $i < hexdec($res['data'][0]); $i++) {
                     $event = [
                         'user_code' => hexdec(implode(array_slice($res['data'], $i * 14 + 1, 5))),
-                        'datetime' => date('Y-m-d H:i:s', hexdec(implode(array_slice($res['data'], $i * 14 + 6, 4))) + (strtotime('2000-01-01 00:00:00') - strtotime('1970-01-01 02:00:00'))),
+                        'datetime' => date('Y-m-d H:i:s', hexdec(implode(array_slice($res['data'], $i * 14 + 6, 4))) + PHPAnviz::ANVIZ_EPOCH),
                         'backup_code' => hexdec($res['data'][$i * 14 + 10]),
                         'record_type' => (int) substr(base_convert($res['data'][$i * 14 + 11], 16, 2), 1),
                         'work_type' => hexdec(implode(array_slice($res['data'], $i * 14 + 12, 2))),
