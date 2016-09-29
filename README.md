@@ -177,22 +177,15 @@ $result = $anviz->clearRecords(PHPAnviz::CLEAR_NEW_PARTIALY, 24); //true if succ
 $result = $anviz->openDoor(); //true if successful, false if failed
 ```
 
-#### Get T&A state table
+#### Get Attendance state table
 ```php
-$result = $anviz->getTAStateTable(); //returns array of states (MAX 16)
+$result = $anviz->getAttendanceStateTable(); //returns array of states (MAX 16)
 ```
 
-#### Set T&A state table
+#### Set Attendance state table
 ```php
 
-//MAX 16 elements, If actual T&A state less than 16, empty state byte set as 0xFF ('FF', null, '' or !isset)
-$states = array(
-  0 => 'I',
-  1 => 'O',
-  2 => 'B'
-  ...
-  14 => null,
-  15 => ''
-);
+//MAX 16 elements
+$states = array('IN', 'OUT', 'BREAK');
 
 $result = $anviz->setTAStateTable($states); //true if successful, false if failed
