@@ -49,7 +49,7 @@ class PHPAnviz {
     /**
      * Anviz devices are calculating time since 2000-01-01 (for gathering records this it seems it's 2000-01-02 instead of 2000-01-01)
      */
-    const ANVIZ_EPOCH = 946767600;
+    const ANVIZ_EPOCH = 946764000;
 
     /**
      * Operation successfull
@@ -622,7 +622,7 @@ class PHPAnviz {
                         'user_code' => hexdec(implode(array_slice($res['data'], $i * 14 + 1, 5))),
                         'datetime' => date('Y-m-d H:i:s', hexdec(implode(array_slice($res['data'], $i * 14 + 6, 4))) + PHPAnviz::ANVIZ_EPOCH),
                         'backup_code' => hexdec($res['data'][$i * 14 + 10]),
-                        'record_type' => (int) substr(base_convert($res['data'][$i * 14 + 11], 16, 2), 1),
+                        'record_type' => bindec(substr(base_convert($res['data'][$i * 14 + 11], 16, 2), 1)),
                         'work_type' => hexdec(implode(array_slice($res['data'], $i * 14 + 12, 2))),
                     ];
 
@@ -876,11 +876,13 @@ class PHPAnviz {
         return false;
     }
 
+    //THIS ONE NEEDS TO BE TESTED, not sure which device support which state table
+    
+    
     /**
      * Get T&A states from device
      * @return array | boolean
      * @access public
-     */
     public function getTAStateTable() {
         $commands = $this->buildRequest(0x5A);
 
@@ -897,15 +899,15 @@ class PHPAnviz {
 
         return false;
     }
+     */
 
     /**
      * Set T&A state table. Max 16 different states. 
      * @param array $states
      * @return boolean
      * @access public
-     */
     public function setTAStateTable($states) {
-        
+
         //check if state element is empty or invalid and replace it with FF
         for ($i = 0; $i < 16; $i++) {
             if (!isset($states[$i]) || $states[$i] == '' || is_null($states[$i]) || $states[$i] == 'FF') {
@@ -918,12 +920,85 @@ class PHPAnviz {
         $commands = $this->buildRequest(0x5B, implode($states));
 
         $res = $this->request($commands);
-        
+
         if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xDB) {
             return true;
         }
-        
+
         return false;
+    }
+    */
+
+    /**
+     * Get T&A states from device
+     * @return array | boolean
+     * @access public
+     */
+    
+    public function getAttendanceStateTable() {
+        $commands = $this->buildRequest(0x70);
+
+        $res = $this->request($commands);
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xF0) {
+            $stateTable = array_fill(0, 16, 'FF');
+
+            for ($i = 1; $i < count($res['data']); $i += 20) {
+                $stateTable[$i / 20] = $this->hex2str(implode(array_slice($res['data'], $i, 20))) . PHP_EOL;
+            }
+
+            return $stateTable;
+        }
+
+        return false;
+    }
+    
+    /**
+     * Set T&A state table. Max 16 different states. 
+     * @param array $states
+     * @return boolean
+     * @access public
+     */
+    
+    public function setAttendanceStateTable($table) {
+
+        $data = sprintf('%02x', count($table));
+
+        $ansi = '0000000000000000000000000000000000000000';
+
+        $states = array_fill(0, 16, $ansi);
+
+        $i = 0;
+
+        foreach ($table as $string) {
+            $word = '';
+            
+            for($j = 0; $j < strlen($string); $j++) {
+                $word .= str_pad(unpack('H*', $string[$j])[1], 4, '0000', STR_PAD_LEFT);
+            }
+            
+            $states[$i++] = str_pad($word, 40, $ansi);
+        }
+
+        $data .= implode($states);
+
+        $commands = $this->buildRequest(0x71, $data);
+
+        $res = $this->request($commands);
+
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xF1) {
+            return true;
+        }
+
+        return false;
+    }
+
+    //for testing purpouse only
+    public function test($command) {
+        $commands = $this->buildRequest($command);
+        $res = $this->request($commands);
+
+        print_r($res);
     }
 
 }
