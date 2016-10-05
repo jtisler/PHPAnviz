@@ -876,59 +876,6 @@ class PHPAnviz {
         return false;
     }
 
-    //THIS ONE NEEDS TO BE TESTED, not sure which device support which state table
-    
-    
-    /**
-     * Get T&A states from device
-     * @return array | boolean
-     * @access public
-    public function getTAStateTable() {
-        $commands = $this->buildRequest(0x5A);
-
-        $res = $this->request($commands);
-
-
-        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xDA) {
-            foreach ($res['data'] as $key => $value) {
-                $res['data'][$key] = $value == 'FF' ? null : $this->hex2str($value);
-            }
-
-            return $res['data'];
-        }
-
-        return false;
-    }
-     */
-
-    /**
-     * Set T&A state table. Max 16 different states. 
-     * @param array $states
-     * @return boolean
-     * @access public
-    public function setTAStateTable($states) {
-
-        //check if state element is empty or invalid and replace it with FF
-        for ($i = 0; $i < 16; $i++) {
-            if (!isset($states[$i]) || $states[$i] == '' || is_null($states[$i]) || $states[$i] == 'FF') {
-                $states[$i] = 'FF';
-            } else {
-                $states[$i] = unpack('H*', $states[$i])[1];
-            }
-        }
-
-        $commands = $this->buildRequest(0x5B, implode($states));
-
-        $res = $this->request($commands);
-
-        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xDB) {
-            return true;
-        }
-
-        return false;
-    }
-    */
-
     /**
      * Get T&A states from device
      * @return array | boolean
@@ -940,11 +887,15 @@ class PHPAnviz {
 
         $res = $this->request($commands);
 
-        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xF0) {
-            $stateTable = array_fill(0, 16, 'FF');
 
-            for ($i = 1; $i < count($res['data']); $i += 20) {
-                $stateTable[$i / 20] = $this->hex2str(implode(array_slice($res['data'], $i, 20))) . PHP_EOL;
+        if ($res['ret'] == PHPAnviz::ACK_SUCCESS && $res['ack'] == 0xF0) {
+            
+            $stateTable = array();
+            
+            $numStates = hexdec($res['data'][0]);
+            
+            for ($i = 0; $i < $numStates; $i++) {
+                $stateTable[$i] = $this->hex2str(implode(array_slice($res['data'], $i * 20 + 1, 20)));
             }
 
             return $stateTable;
