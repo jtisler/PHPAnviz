@@ -259,7 +259,6 @@ class PHPAnviz {
             $output = $json;
         }
 
-
         return $output;
     }
 
